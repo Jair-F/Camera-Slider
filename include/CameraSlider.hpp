@@ -18,7 +18,10 @@ public:
 
 	void run();
 
-	void setSpeed(float speed);
+	void setSpeed(float _speed);
+	void setMaxSpeed(float _maxSpeed);
+
+	void moveTo(Position pos);
 
 	void setAcceleration(float acceleration);
 
@@ -33,12 +36,44 @@ private:
 	AccelStepper y_axis;
 	AccelStepper z_axis;
 
-	
+	float speed;
+	float maxSpeed;
 };
 
 
 
 // Implementation
+
+void CameraSlider::moveTo(Position pos) {
+	x_axis.moveTo(pos.x);
+	y_axis.moveTo(pos.y);
+	z_axis.moveTo(pos.z);
+	this->calcAndSetNewSpeed(speed);
+}
+
+void CameraSlider::setSpeed(float _speed) {
+	if(_speed <= maxSpeed) {
+		speed = _speed;
+		this->calcAndSetNewSpeed(speed);
+	}
+	else {
+		// Need to implement other exception
+		throw "Error - speed > maxSpeed";
+	}
+}
+
+void CameraSlider::setMaxSpeed(float _maxSpeed) {
+	x_axis.setMaxSpeed(maxSpeed);
+	y_axis.setMaxSpeed(maxSpeed);
+	z_axis.setMaxSpeed(maxSpeed);
+	maxSpeed = maxSpeed;
+}
+
+void CameraSlider::setAcceleration(float acceleration) {
+	x_axis.setAcceleration(acceleration);
+	y_axis.setAcceleration(acceleration);
+	z_axis.setAcceleration(acceleration);
+}
 
 Position CameraSlider::getCurrentPosition() {
 	Position ret;
@@ -64,9 +99,9 @@ void CameraSlider::calcAndSetNewSpeed(float speed) {
 
 	float one_percent_of_greatest_distance = greatest_distance / 100.0;	// Convert the 100 to a float(100.0) in order to not cut the numbers after the comma
 
-	x_axis.setSpeed(x_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
-	y_axis.setSpeed(y_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
-	z_axis.setSpeed(z_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
+	x_axis.setMaxSpeed(x_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
+	y_axis.setMaxSpeed(y_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
+	z_axis.setMaxSpeed(z_axis.distanceToGo() / one_percent_of_greatest_distance * one_precent_of_speed);
 }
 
 void CameraSlider::run() {
