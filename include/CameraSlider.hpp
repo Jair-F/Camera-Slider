@@ -17,8 +17,15 @@ public:
 	Position getCurrentPosition();
 
 	void run();
+	// run to the target point which was set previously with the given speed
+	void runSpeed(float _speed);
 
+	/*
+		The speed with acceleration/deacceleration. this is the speed for the longest distanceToGo-axis. The other axises
+		get their speed accroding to their path to run to ensure they all arrive at the endpoint at the same time
+	*/
 	void setSpeed(float _speed);
+	// Max speed, which will not be exceeded. Every time the speed is set it will be checked. If it exceeds, it will throw an exception
 	void setMaxSpeed(float _maxSpeed);
 
 	void moveTo(Position pos);
@@ -108,4 +115,19 @@ void CameraSlider::run() {
 	x_axis.run();
 	y_axis.run();
 	z_axis.run();
+}
+
+void CameraSlider::runSpeed(float _speed) {
+	if(_speed <= maxSpeed) {
+		x_axis.setSpeed(_speed);
+		y_axis.setSpeed(_speed);
+		z_axis.setSpeed(_speed);
+
+		x_axis.runSpeed();
+		y_axis.runSpeed();
+		z_axis.runSpeed();
+	}
+	else {
+		throw "Error - speed > maxSpeed";
+	}
 }
