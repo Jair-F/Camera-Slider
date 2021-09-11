@@ -65,7 +65,7 @@ void CameraSlider::setSpeed(float _speed) {
 	}
 	else {
 		// Need to implement other exception
-		throw "Error - speed > maxSpeed";
+		Serial.println("Error - speed > maxSpeed");
 	}
 }
 
@@ -128,6 +128,6 @@ void CameraSlider::runSpeed(float _speed) {
 		z_axis.runSpeed();
 	}
 	else {
-		throw "Error - speed > maxSpeed";
+		Serial.println("Error - speed > maxSpeed");
 	}
 }
