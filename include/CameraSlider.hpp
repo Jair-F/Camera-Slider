@@ -10,9 +10,9 @@ class CameraSlider {
 public:
 	CameraSlider(uint8_t x_axis_pin_1, uint8_t x_axis_pin_2, uint8_t x_axis_pin_3, uint8_t x_axis_pin_4, 
 				 uint8_t y_axis_pin_1, uint8_t y_axis_pin_2, uint8_t y_axis_pin_3, uint8_t y_axis_pin_4, 
-				 uint8_t z_axis_pin_1, uint8_t z_axis_pin_2, uint8_t z_axis_pin_3, uint8_t z_axis_pin_4):	x_axis(x_axis_pin_1, x_axis_pin_2, x_axis_pin_3, x_axis_pin_4),
-				 																							y_axis(y_axis_pin_1, y_axis_pin_2, y_axis_pin_3, y_axis_pin_4),
-				 																							z_axis(z_axis_pin_1, z_axis_pin_2, z_axis_pin_3, z_axis_pin_4) { }
+				 uint8_t z_axis_pin_1, uint8_t z_axis_pin_2, uint8_t z_axis_pin_3, uint8_t z_axis_pin_4):	x_axis(AccelStepper::FULL4WIRE, x_axis_pin_1, x_axis_pin_2, x_axis_pin_3, x_axis_pin_4),
+				 																							y_axis(AccelStepper::FULL4WIRE, y_axis_pin_1, y_axis_pin_2, y_axis_pin_3, y_axis_pin_4),
+				 																							z_axis(AccelStepper::FULL4WIRE, z_axis_pin_1, z_axis_pin_2, z_axis_pin_3, z_axis_pin_4) { }
 
 	Position getCurrentPosition();
 
