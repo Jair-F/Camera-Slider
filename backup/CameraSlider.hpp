@@ -1,11 +1,11 @@
 #include <AccelStepper.h>
 
 #pragma once
-
+/*
 struct Position {
 	long x, y, z;
 };
-
+*/
 class CameraSlider {
 public:
 	CameraSlider(uint8_t x_axis_pin_1, uint8_t x_axis_pin_2, uint8_t x_axis_pin_3, uint8_t x_axis_pin_4, 
