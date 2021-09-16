@@ -41,6 +41,12 @@ public:
 	void moveTo(long long pos, long double _lastStepSpeed);
 
 	/*
+		Goes only one step forward with the given speed
+		@param direction true for clockwise
+	*/
+	void move(bool direction, double speed);
+
+	/*
 		@return distance from the actual position to the target Position. positive if we move clockwise
 	*/
 	long long distanceToGo() { return target_position - current_position; }
@@ -55,6 +61,11 @@ public:
 		@return true if the stepper is not on the targetPosition(actually moving)
 	*/
 	bool isRunning() { return current_position != target_position; }
+
+	/*
+		force stops the motor(sets the targetPosition to the currentPosition)
+	*/
+	void forceStop();
 
 protected:
 	/*
@@ -92,6 +103,26 @@ void StepMotor::moveTo(long long pos, long double _lastStepSpeed) {
 	calc_and_set_new_speeds();
 }
 
+void StepMotor::move(bool direction, double speed) {
+	this->forceStop();
+
+	long timer_begin = millis();
+	if(direction == true) {
+		motor.step(1);
+		++current_position;
+	}
+	else {
+		motor.step(-1);
+		--current_position;
+	}
+	long timer_end = millis();
+
+	long difference = timer_end - timer_begin;
+	if(speed - difference > 0) {
+		delay(speed - difference);	// slepp if needed to set the right speed
+	}
+}
+
 bool StepMotor::run() {
 	// Step only one step if the speed=(time between the steps) is passed and we are not on the targetPosition
 	if(millis() >= last_step_time_point + current_speed && current_position != target_position) {
@@ -108,4 +139,8 @@ bool StepMotor::run() {
 		}
 	}
 	return isRunning();
+}
+
+void StepMotor::forceStop() {
+	target_position = current_position;
 }
