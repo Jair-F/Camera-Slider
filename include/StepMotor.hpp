@@ -30,6 +30,11 @@ public:
 	void setDistanceTraveld(long long _distance_traveld) { distance_traveld = _distance_traveld; }
 
 	/*
+		set the last step speed and calculate from it the new acceleration to the already given target_position
+	*/
+	void setLastStepSpeed(double lastStepSpeed);
+
+	/*
 		@param _maxSpeed in this case the higher the value is the faster the motor will move(figure out the value for your motor)
 	*/
 	void setMaxSpeed(long _maxSpeed) { maxSpeed = _maxSpeed; }
@@ -42,7 +47,7 @@ public:
 		@param _lastStepSpeed The motor will incerase his speed from the previous set speed to this speed(_lastStepSpeed) in such a way
 		that he incerases the speed constantly at every step and this value is the speed of the las step
 	*/
-	void moveTo(long long pos, long double _lastStepSpeed);
+	void moveTo(long long pos, double _lastStepSpeed);
 
 	/*
 		Goes only one step forward with the given speed
@@ -76,7 +81,7 @@ protected:
 		Calcs the new speed_incerase_per_step for the actual set target_position, target_last_step_speed and actual_speed
 		The metiont parameters need to be already set to the new parameters
 	*/
-	void calc_and_set_new_speeds() {
+	void set_new_speed_incerase_per_step() {
 		speed_change_per_step = (abs(target_last_step_speed - current_speed)) / (abs(target_position - current_position));
 
 		// If we need to decerase the speed
@@ -103,11 +108,16 @@ private:
 
 // Implementations
 
-void StepMotor::moveTo(long long pos, long double _lastStepSpeed) {
+void StepMotor::setLastStepSpeed(double _lastStepSpeed) {
+	target_last_step_speed = _lastStepSpeed;
+	set_new_speed_incerase_per_step();
+}
+
+void StepMotor::moveTo(long long pos, double _lastStepSpeed) {
 	target_position = pos;
 	target_last_step_speed = _lastStepSpeed;
 
-	calc_and_set_new_speeds();
+	set_new_speed_incerase_per_step();
 }
 
 void StepMotor::move(bool direction, double speed) {
