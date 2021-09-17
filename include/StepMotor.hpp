@@ -1,6 +1,8 @@
 #include <Stepper.h>
 #include <math.h>
 
+#pragma once
+
 struct Position {
 	long x, y, z;
 	double speedAtPosition;	// The speed, the motor has to have if he reaches this position
