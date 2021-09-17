@@ -3,27 +3,29 @@
 
 struct Position {
 	long x, y, z;
+	double speedAtPosition;	// The speed, the motor has to have if he reaches this position
 };
 
 struct SpeedChange {
-	unsigned int speed;
-	Position speedChangePosition;
+	double speed;
+	long long speedChangePosition;
 };
-
-
-Position positions[10];
-SpeedChange speeds[5];
 
 
 class StepMotor {
 public:
 	StepMotor(int number_of_steps_in_one_revolution, int motor_pin_1, int motor_pin_2, int motor_pin_3, int motor_pin_4, long _maxSpeed = 10): motor(number_of_steps_in_one_revolution, motor_pin_1, motor_pin_2, motor_pin_3, motor_pin_4), maxSpeed(_maxSpeed) {
 		motor.setSpeed(maxSpeed);
+		distance_traveld = 0;
 	}
 
 	long long currentPosition() { return current_position; }
 
+	long long distanceTraveld() { return distance_traveld; }
+
 	void setCurrentPosition(long long _pos) { current_position = _pos; }
+
+	void setDistanceTraveld(long long _distance_traveld) { distance_traveld = _distance_traveld; }
 
 	/*
 		@param _maxSpeed in this case the higher the value is the faster the motor will move(figure out the value for your motor)
@@ -86,8 +88,9 @@ private:
 
 	long maxSpeed;
 
-	long long current_position;
+	long long current_position;	// the position(if we are on position 0 and go then 10 to plus and afterwards 10 to minus the position os again 0)
 	long long target_position;
+	long long distance_traveld;	// if we are on position 0 and go then 10 to plus and afterwards 10 to minus the distance we traveld is 20
 	
 	double current_speed;				// The actual Speed. speed is the of milliseconds number, we delay between the single steps!
 	double target_last_step_speed;	// The speed of the last step should be this speed
@@ -95,6 +98,8 @@ private:
 
 	long long last_step_time_point = 0;
 };
+
+// Implementations
 
 void StepMotor::moveTo(long long pos, long double _lastStepSpeed) {
 	target_position = pos;
@@ -116,6 +121,8 @@ void StepMotor::move(bool direction, double speed) {
 		--current_position;
 	}
 	long timer_end = millis();
+	
+	++distance_traveld;
 
 	long difference = timer_end - timer_begin;
 	if(speed - difference > 0) {
@@ -137,6 +144,7 @@ bool StepMotor::run() {
 			motor.step(1);
 			current_position += 1;
 		}
+		++distance_traveld;
 	}
 	return isRunning();
 }
