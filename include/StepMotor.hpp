@@ -61,7 +61,9 @@ public:
 	/*
 		@return distance from the actual position to the target Position. positive if we move clockwise
 	*/
-	long long distanceToGo() { return target_position - current_position; }
+	long long distanceToGoToTargetPosition() { return target_position - current_position; }
+
+	long long distanceToGoToTargetDistanceTraveld() { return target_distance_traveld_position - distance_traveld; }
 
 	/*
 		Need to be called in the main loop. Makes a step if a step is due.
