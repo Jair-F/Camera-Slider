@@ -3,20 +3,9 @@
 
 #pragma once
 
-struct Position {
-	long x, y, z;
-	double speedAtPosition;	// The speed, the motor has to have if he reaches this position
-};
-
-struct SpeedChange {
-	double speed;
-	long long speedChangePosition;
-};
-
-
 class StepMotor {
 public:
-	StepMotor(int number_of_steps_in_one_revolution, int motor_pin_1, int motor_pin_2, int motor_pin_3, int motor_pin_4, long _maxSpeed = 10): motor(number_of_steps_in_one_revolution, motor_pin_1, motor_pin_2, motor_pin_3, motor_pin_4), maxSpeed(_maxSpeed) {
+	StepMotor(int number_of_steps_in_one_revolution, int motor_pin_1, int motor_pin_2, int motor_pin_3, int motor_pin_4, double _maxSpeed = 10): motor(number_of_steps_in_one_revolution, motor_pin_1, motor_pin_2, motor_pin_3, motor_pin_4), maxSpeed(_maxSpeed) {
 		motor.setSpeed(maxSpeed);
 		distance_traveld = 0;
 	}
@@ -29,20 +18,15 @@ public:
 
 	void setDistanceTraveld(long long _distance_traveld) { distance_traveld = _distance_traveld; }
 
-	/*
-		set the last step speed and calculate from it the new acceleration to the position of the traveld distance
-		@param lastStepSpeed the speed, the motor will turn on the last step to the traveldDistancePosition
-		@param traveldDistancePosition The speed will de-/accelerate until the motor reaches this point of made steps(doesnt depends in which direction the motor turned)
-	*/
-	void setLastStepSpeed(double lastStepSpeed, long long traveldDistancePosition);
+	void setSpeedChangePerStep(double _speedChangePerStep) { speed_change_per_step = _speedChangePerStep; }
 
 	/*
 		@param _maxSpeed in this case the higher the value is the faster the motor will move(figure out the value for your motor)
 	*/
-	void setMaxSpeed(long _maxSpeed) { maxSpeed = _maxSpeed; }
+	void setMaxSpeed(double _maxSpeed) { maxSpeed = _maxSpeed; }
 	
 	double getCurrenSpeed() { return current_speed; }
-	double getCurrenSpeedChange() { return speed_change_per_step; }
+	double getCurrenSpeedChangePerStep() { return speed_change_per_step; }
 
 	/*
 		@param pos target-Position the motor will move to(positive is clockwise, negative counter clockwise)
@@ -63,8 +47,6 @@ public:
 	*/
 	long long distanceToGoToTargetPosition() { return target_position - current_position; }
 
-	long long distanceToGoToTargetDistanceTraveld() { return target_distance_traveld_position - distance_traveld; }
-
 	/*
 		Need to be called in the main loop. Makes a step if a step is due.
 		@return true if the motor is still running to a point.
@@ -81,45 +63,23 @@ public:
 	*/
 	void forceStop();
 
-protected:
-	/*
-		Calcs the new speed_incerase_per_step for the actual set target_position, target_last_step_speed and actual_speed
-		The metiont parameters need to be already set to the new parameters
-	*/
-	void set_new_speed_incerase_per_step() {
-		speed_change_per_step = (abs(target_last_step_speed - current_speed)) / (abs(target_distance_traveld_position - distance_traveld));
-
-		// If we need to decerase the speed
-		if(target_last_step_speed < current_speed) {
-			speed_change_per_step = -speed_change_per_step;
-		}
-	}
-
 private:
 	Stepper motor;
 
-	long maxSpeed;
+	double maxSpeed;
 
 	long long current_position;	// the position(if we are on position 0 and go then 10 to plus and afterwards 10 to minus the position os again 0)
 	long long target_position;
 
 	long long distance_traveld;					// if we are on position 0 and go then 10 to plus and afterwards 10 to minus the distance we traveld is 20
-	long long target_distance_traveld_position;	// stores the point, until where the speed will incerase to the target_last_step_speed
 	
 	double current_speed;				// The actual Speed. speed is the of milliseconds number, we delay between the single steps!
-	double target_last_step_speed;	// The speed of the last(of the target_distance_traveld_position) step should be this speed
 	double speed_change_per_step;	// In order to reach the target_last_step_speed we need to incerase the speed of each step with this value
 
-	long long last_step_time_point = 0;
+	long long last_step_time_point = 0;	// The time point, we made the last step to move to the target-Position
 };
 
 // Implementations
-
-void StepMotor::setLastStepSpeed(double _lastStepSpeed, long long traveldDistancePosition) {
-	target_last_step_speed = _lastStepSpeed;
-	target_distance_traveld_position = traveldDistancePosition;
-	set_new_speed_incerase_per_step();
-}
 
 void StepMotor::moveTo(long long pos) {
 	target_position = pos;
@@ -141,7 +101,6 @@ void StepMotor::move(bool direction, double speed) {
 	
 	++distance_traveld;
 	current_speed = speed;
-	set_new_speed_incerase_per_step();	// In case we will afterwards move to the target position we store the speed and clac the new de-/acceleration
 
 	long difference = timer_end - timer_begin;
 	if(speed - difference > 0) {
