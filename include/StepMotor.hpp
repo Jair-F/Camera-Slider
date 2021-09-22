@@ -7,16 +7,11 @@ class StepMotor {
 public:
 	StepMotor(int number_of_steps_in_one_revolution, int motor_pin_1, int motor_pin_2, int motor_pin_3, int motor_pin_4, double _maxSpeed = 10): motor(number_of_steps_in_one_revolution, motor_pin_1, motor_pin_2, motor_pin_3, motor_pin_4), maxSpeed(_maxSpeed) {
 		motor.setSpeed(maxSpeed);
-		distance_traveld = 0;
 	}
 
 	long long currentPosition() { return current_position; }
 
-	long long distanceTraveld() { return distance_traveld; }
-
 	void setCurrentPosition(long long _pos) { current_position = _pos; }
-
-	void setDistanceTraveld(long long _distance_traveld) { distance_traveld = _distance_traveld; }
 
 	void setSpeedChangePerStep(double _speedChangePerStep) { speed_change_per_step = _speedChangePerStep; }
 
@@ -25,8 +20,8 @@ public:
 	*/
 	void setMaxSpeed(double _maxSpeed) { maxSpeed = _maxSpeed; }
 	
-	double getCurrenSpeed() { return current_speed; }
-	double getCurrenSpeedChangePerStep() { return speed_change_per_step; }
+	double currenSpeed() { return current_speed; }
+	double speedChangePerStep() { return speed_change_per_step; }
 
 	/*
 		@param pos target-Position the motor will move to(positive is clockwise, negative counter clockwise)
@@ -49,7 +44,7 @@ public:
 
 	/*
 		Need to be called in the main loop. Makes a step if a step is due.
-		@return true if the motor is still running to a point.
+		@return true if the motor made at this call of this run-function a step
 	*/
 	bool run();
 
@@ -71,8 +66,6 @@ private:
 	long long current_position;	// the position(if we are on position 0 and go then 10 to plus and afterwards 10 to minus the position os again 0)
 	long long target_position;
 
-	long long distance_traveld;					// if we are on position 0 and go then 10 to plus and afterwards 10 to minus the distance we traveld is 20
-	
 	double current_speed;				// The actual Speed. speed is the of milliseconds number, we delay between the single steps!
 	double speed_change_per_step;	// In order to reach the target_last_step_speed we need to incerase the speed of each step with this value
 
@@ -99,7 +92,6 @@ void StepMotor::move(bool direction, double speed) {
 	}
 	long timer_end = millis();
 	
-	++distance_traveld;
 	current_speed = speed;
 
 	long difference = timer_end - timer_begin;
@@ -110,7 +102,8 @@ void StepMotor::move(bool direction, double speed) {
 
 bool StepMotor::run() {
 	// Step only one step if the speed=(time between the steps) is passed and we are not on the targetPosition
-	if(millis() >= last_step_time_point + current_speed && current_position != target_position) {
+	bool step_is_due = millis() >= last_step_time_point + current_speed && current_position != target_position;
+	if(step_is_due) {
 		last_step_time_point = millis();
 
 		current_speed += speed_change_per_step;
@@ -122,9 +115,8 @@ bool StepMotor::run() {
 			motor.step(1);
 			current_position += 1;
 		}
-		++distance_traveld;
 	}
-	return isRunning();
+	return step_is_due;
 }
 
 void StepMotor::forceStop() {
