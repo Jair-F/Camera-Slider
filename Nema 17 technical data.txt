@@ -1,0 +1,7 @@
+Normal Step Mode:
+	step angle(per step) = 1.8 deg
+	steps per revolution = 200
+
+step motor driver used for NEMA17: TCM2209
+
+*in the sketch the step pulse is sent at max every 30 microseconds*
