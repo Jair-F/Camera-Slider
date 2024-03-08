@@ -16,5 +16,6 @@ uint64_t micros64()
 	 */
 	if (new_low32 < low32)
 		++high32;
+	low32 = new_low32;
 	return static_cast<uint64_t>(high32) << 32 | low32;
 }

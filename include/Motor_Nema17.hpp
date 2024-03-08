@@ -8,7 +8,7 @@
 
 namespace
 {
-	constexpr auto MAX_SPEED = 400; // RPM
+	constexpr auto MAX_SPEED = 1200; // RPM
 	constexpr auto STEPS_PER_ROTATION = 200;
 
 	//												max rotations per minute
@@ -20,7 +20,7 @@ namespace
 class Motor_Nema17
 {
 private:
-	uint8_t enablePin, directionPin, stepPin;
+	uint8_t directionPin, stepPin, enablePin;
 	TIME_TYPE lastStep_TPoint; // in micros
 	POS_TYPE pos;
 	bool in_syncMovingMode; // if the motor is in synced synchronized mode - approaching a point by a specific time point
@@ -31,7 +31,7 @@ private:
 	POS_TYPE syncMovingStart = 0, syncMovingEnd = 0;
 	TIME_TYPE syncMovingStart_TPoint = 0, syncMovingEnd_TPoint = 0;
 
-protected:
+public:
 	/**
 	 * calculates the parameters required by synced moving
 	 */
@@ -51,8 +51,10 @@ protected:
 	 */
 	POS_TYPE syncMoving_expectedPos();
 
-public:
-	Motor_Nema17() {}
+	void _makeStep();
+
+	// public:
+	Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin);
 	virtual ~Motor_Nema17() {}
 
 	// step one step forward -> in + direction
@@ -60,8 +62,8 @@ public:
 	// step one step backward -> in - direction
 	void stepBackward();
 
-	POS_TYPE getPos() const { return pos; }
-	void overWritePos(POS_TYPE _pos) { pos = _pos; }
+	POS_TYPE getPos() const { return this->pos; }
+	void overWritePos(POS_TYPE _pos) { this->pos = _pos; }
 
 	/**
 	 * @return absolute distance from current position to destination
@@ -83,6 +85,7 @@ public:
 	/**
 	 * takes the current position and prepares the synced moving.
 	 * by the next loopSyncMoving() call the synced moving will start
+	 * @param _arrive_TPoint time point in micro seconds
 	 *
 	 * @return true if every parameters are valid - speed in limit and _arrive_TPoint later than now
 	 */
@@ -91,18 +94,39 @@ public:
 	void abortSyncMoving() { this->in_syncMovingMode = false; }
 
 	void loopSyncMoving();
+
+	bool isSyncMoving() const { return this->in_syncMovingMode; }
 };
+
+Motor_Nema17::Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin) : directionPin(_directionPin), stepPin(_stepPin)
+{
+	pinMode(directionPin, OUTPUT);
+	pinMode(stepPin, OUTPUT);
+}
+
+void Motor_Nema17::_makeStep()
+{
+	// check that the last step is in more than min delay between step - 5us
+
+	digitalWrite(this->stepPin, HIGH);
+	delayMicroseconds(5); // min delay to read the step signal
+	digitalWrite(this->stepPin, LOW);
+}
 
 void Motor_Nema17::stepForward()
 {
-	// check that the last step is in more than min delay between step - 5us
+	digitalWrite(directionPin, HIGH);
+	this->_makeStep();
+
 	this->pos += 1;
 	lastStep_TPoint = micros64();
 }
 
 void Motor_Nema17::stepBackward()
 {
-	// check that the last step is in more than min delay between step - 5us
+	digitalWrite(directionPin, LOW);
+	this->_makeStep();
+
 	this->pos -= 1;
 	lastStep_TPoint = micros64();
 }
@@ -145,10 +169,20 @@ POS_TYPE Motor_Nema17::syncMoving_expectedPos()
 	TIME_TYPE microsPerStep = // delay in microseconds between each step
 		this->getSyncMoveDuration() / this->getSyncMoveDist();
 
+	// Serial.print("microsPerStep: ");
+	// Serial.println((uint32_t)(micros64() - this->syncMovingStart_TPoint) / (uint32_t)microsPerStep);
+
+	POS_TYPE expectedPos = 0;
+
 	if (this->getPos() < this->syncMovingEnd) // moving in + direction
-		return this->syncMovingStart + (micros64() - this->syncMovingStart_TPoint) * microsPerStep;
+		expectedPos = this->syncMovingStart + (micros64() - this->syncMovingStart_TPoint) / microsPerStep;
 	else // this->syncMovingEnd > this->getPos() -> moving in - direction
-		return this->syncMovingStart - (micros64() - this->syncMovingStart_TPoint) * microsPerStep;
+		expectedPos = this->syncMovingStart - (micros64() - this->syncMovingStart_TPoint) / microsPerStep;
+
+	if (expectedPos > this->getSyncMoveDist())
+		return this->getSyncMoveDist();
+	else
+		return expectedPos;
 }
 
 void Motor_Nema17::loopSyncMoving()
@@ -160,11 +194,14 @@ void Motor_Nema17::loopSyncMoving()
 		if (posDiff != 0)
 		{
 			if (expectedPos > this->getPos()) // moving in + direction
-				for (uint8_t i = 0; i < posDiff; ++i)
+				for (uint16_t i = 0; i < posDiff; ++i)
 					this->stepForward();
 			else // moving in - direction
-				for (uint8_t i = 0; i < posDiff; ++i)
+				for (uint16_t i = 0; i < posDiff; ++i)
 					this->stepBackward();
 		}
+
+		if (this->getPos() == this->syncMovingEnd)
+			this->in_syncMovingMode = false;
 	}
 }
