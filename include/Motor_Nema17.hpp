@@ -3,7 +3,7 @@
 #include <math.h>
 #include "micros_64.hpp"
 
-#define POS_TYPE uint32_t
+#define POS_TYPE int32_t
 #define TIME_TYPE uint64_t
 
 namespace
@@ -12,7 +12,6 @@ namespace
 	constexpr auto STEPS_PER_ROTATION = 200;
 
 	//												max rotations per minute
-
 	constexpr auto MAX_STEPS_PER_SECOND = (((uint32_t)MAX_SPEED * (uint32_t)STEPS_PER_ROTATION) / 60);
 	constexpr auto MIN_DELAY_PER_STEP = ((uint32_t)1000 * (uint32_t)1000) / (uint32_t)MAX_STEPS_PER_SECOND; // in micro seconds
 }
@@ -20,10 +19,14 @@ namespace
 class Motor_Nema17
 {
 private:
-	uint8_t directionPin, stepPin, enablePin;
-	TIME_TYPE lastStep_TPoint; // in micros
-	POS_TYPE pos;
-	bool in_syncMovingMode; // if the motor is in synced synchronized mode - approaching a point by a specific time point
+	uint8_t directionPin, stepPin, enablePin = true;
+	/**
+	 * true on forward, false on backward
+	 */
+	bool currDirect = true;
+	TIME_TYPE lastStep_TPoint = 0;	// in micros
+	POS_TYPE pos = 0;				// current pos of motor
+	bool in_syncMovingMode = false; // if the motor is in synced/synchronized mode - approaching a point by a specific time point
 
 	/**
 	 * start postion where started with syncMoving
@@ -31,16 +34,22 @@ private:
 	POS_TYPE syncMovingStart = 0, syncMovingEnd = 0;
 	TIME_TYPE syncMovingStart_TPoint = 0, syncMovingEnd_TPoint = 0;
 
-public:
+protected:
 	/**
 	 * calculates the parameters required by synced moving
 	 */
 	void calcSyncMoving();
 
-	POS_TYPE getSyncMoveDist();
+	/**
+	 * @return the absolute distance from the point the motor
+	 * started(!not necessarily current pos) sync moving to its destination
+	 */
+	inline POS_TYPE getSyncMoveDist() const { return abs(this->syncMovingEnd - this->syncMovingStart); }
 
-	// returns the duration of the synchronized move
-	TIME_TYPE getSyncMoveDuration() { return this->syncMovingEnd_TPoint - this->syncMovingStart_TPoint; }
+	/**
+	 * @return duration of the synchronized move
+	 */
+	inline TIME_TYPE getSyncMoveDuration() const { return this->syncMovingEnd_TPoint - this->syncMovingStart_TPoint; }
 
 	/**
 	 * when in syncMoving this function returns the expected position where the motor
@@ -49,38 +58,57 @@ public:
 	 * the actual pos and expected will be compensated and reduced by one at the next
 	 * loopSyncMoving() call.
 	 */
-	POS_TYPE syncMoving_expectedPos();
+	POS_TYPE syncMovingExpectedPos();
 
-	void _makeStep();
+	/**
+	 * makes one step in the direction the dirPin is set to.
+	 *
+	 * @attention make sure that between every call of the function there
+	 * is at least 5us delay to let the motor work properly
+	 */
+	inline void _makeStep();
 
-	// public:
+public:
 	Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin);
 	virtual ~Motor_Nema17() {}
 
-	// step one step forward -> in + direction
-	void stepForward();
-	// step one step backward -> in - direction
-	void stepBackward();
+	/**
+	 * configure the set outputs as output at arduino
+	 */
+	void begin();
 
-	POS_TYPE getPos() const { return this->pos; }
-	void overWritePos(POS_TYPE _pos) { this->pos = _pos; }
+	// step one step forward -> in + direction
+	inline void stepForward();
+	// step one step backward -> in - direction
+	inline void stepBackward();
+
+	// @return current position of motor
+	inline POS_TYPE getPos() const { return this->pos; }
+	// in order to set manually 0 at a specific point as reference
+	inline void overWritePos(POS_TYPE _pos) { this->pos = _pos; }
 
 	/**
 	 * @return absolute distance from current position to destination
 	 */
-	POS_TYPE distTo(POS_TYPE _dest);
+	inline POS_TYPE absDistTo(POS_TYPE _dest) const { return abs(_dest - this->getPos()); }
+
+	/**
+	 * @return relative distance to _dest -> considers the direction the motor has to go.
+	 * - for backward, + for forward
+	 */
+	inline POS_TYPE relDistTo(POS_TYPE _dest) const { return _dest - this->getPos(); }
 
 	/**
 	 * @param dist distance for the motor to travel in steps/microsteps
 	 * @param duration duration to travel the dist in micro seconds
 	 * @return true if the calculated speed doesnt exceeds the max speed of the motor
 	 */
-	bool isValidSpeed(POS_TYPE dist, TIME_TYPE duration) { return duration / dist > MIN_DELAY_PER_STEP; }
+	inline bool isValidSpeed(POS_TYPE dist, TIME_TYPE duration) const { return (duration / dist) > MIN_DELAY_PER_STEP; }
 
 	/**
 	 * @return the minimum requred time to travel the pased distance at the motors max speed in micro seconds
 	 */
-	TIME_TYPE minReqTime(POS_TYPE dist) { return (dist / MAX_STEPS_PER_SECOND) * 1000 * 1000; }
+	inline TIME_TYPE minReqTime(POS_TYPE dist) const { return (dist / MAX_STEPS_PER_SECOND) * 1000 * 1000; }
 
 	/**
 	 * takes the current position and prepares the synced moving.
@@ -91,68 +119,62 @@ public:
 	 */
 	bool startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint);
 
-	void abortSyncMoving() { this->in_syncMovingMode = false; }
+	inline void abortSyncMoving() { this->in_syncMovingMode = false; }
 
+	/**
+	 * should be called on the main loop. moves the
+	 * motor if he is in synced moving mode.
+	 */
 	void loopSyncMoving();
 
-	bool isSyncMoving() const { return this->in_syncMovingMode; }
+	inline bool isSyncMoving() const { return this->in_syncMovingMode; }
 };
 
 Motor_Nema17::Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin) : directionPin(_directionPin), stepPin(_stepPin)
 {
+}
+void Motor_Nema17::begin()
+{
 	pinMode(directionPin, OUTPUT);
 	pinMode(stepPin, OUTPUT);
+
+	digitalWrite(directionPin, this->currDirect);
 }
 
 void Motor_Nema17::_makeStep()
 {
-	// check that the last step is in more than min delay between step - 5us
-
 	digitalWrite(this->stepPin, HIGH);
-	delayMicroseconds(5); // min delay to read the step signal
+	delayMicroseconds(5); // min delay for the motor driver to read the step signal
 	digitalWrite(this->stepPin, LOW);
+
+	this->lastStep_TPoint = micros64();
 }
 
 void Motor_Nema17::stepForward()
 {
-	digitalWrite(directionPin, HIGH);
+	if (currDirect != true)
+		digitalWrite(directionPin, HIGH);
 	this->_makeStep();
 
 	this->pos += 1;
-	lastStep_TPoint = micros64();
+	// this->lastStep_TPoint = micros64();
 }
 
 void Motor_Nema17::stepBackward()
 {
-	digitalWrite(directionPin, LOW);
+	if (currDirect != false)
+		digitalWrite(directionPin, LOW);
 	this->_makeStep();
 
 	this->pos -= 1;
-	lastStep_TPoint = micros64();
-}
-
-POS_TYPE Motor_Nema17::distTo(POS_TYPE _dest)
-{
-	if (_dest > this->getPos())
-		return _dest - this->getPos();
-	else
-		return this->getPos() - _dest;
-}
-
-POS_TYPE Motor_Nema17::getSyncMoveDist()
-{
-	// checking becuase its unsigned variable
-	if (this->syncMovingEnd > this->syncMovingStart)
-		return this->syncMovingEnd - this->syncMovingStart;
-	else
-		return this->syncMovingStart - this->syncMovingEnd;
+	// this->lastStep_TPoint = micros64();
 }
 
 bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
 {
 	if (_destPos == this->getPos() ||
 		_arrive_TPoint <= micros64() ||
-		!this->isValidSpeed(this->distTo(_destPos), _arrive_TPoint - micros64()))
+		!this->isValidSpeed(this->absDistTo(_destPos), _arrive_TPoint - micros64()))
 		return false;
 
 	this->in_syncMovingMode = true;
@@ -164,40 +186,39 @@ bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
 	return true;
 }
 
-POS_TYPE Motor_Nema17::syncMoving_expectedPos()
+POS_TYPE Motor_Nema17::syncMovingExpectedPos()
 {
 	TIME_TYPE microsPerStep = // delay in microseconds between each step
 		this->getSyncMoveDuration() / this->getSyncMoveDist();
-
-	// Serial.print("microsPerStep: ");
-	// Serial.println((uint32_t)(micros64() - this->syncMovingStart_TPoint) / (uint32_t)microsPerStep);
 
 	POS_TYPE expectedPos = 0;
 
 	if (this->getPos() < this->syncMovingEnd) // moving in + direction
 		expectedPos = this->syncMovingStart + (micros64() - this->syncMovingStart_TPoint) / microsPerStep;
-	else // this->syncMovingEnd > this->getPos() -> moving in - direction
+	else // this->getPos() > this->syncMovingEnd -> moving in - direction
 		expectedPos = this->syncMovingStart - (micros64() - this->syncMovingStart_TPoint) / microsPerStep;
 
+	/*
 	if (expectedPos > this->getSyncMoveDist())
 		return this->getSyncMoveDist();
 	else
-		return expectedPos;
+	*/
+	return expectedPos;
 }
 
 void Motor_Nema17::loopSyncMoving()
 {
 	if (this->in_syncMovingMode)
 	{
-		auto expectedPos = this->syncMoving_expectedPos();
-		auto posDiff = this->distTo(expectedPos);
+		auto expectedPos = this->syncMovingExpectedPos();
+		auto posDiff = this->relDistTo(expectedPos);
 		if (posDiff != 0)
 		{
 			if (expectedPos > this->getPos()) // moving in + direction
-				for (uint16_t i = 0; i < posDiff; ++i)
+				for (uint16_t i = 0; i < abs(posDiff); ++i)
 					this->stepForward();
 			else // moving in - direction
-				for (uint16_t i = 0; i < posDiff; ++i)
+				for (uint16_t i = 0; i < abs(posDiff); ++i)
 					this->stepBackward();
 		}
 
