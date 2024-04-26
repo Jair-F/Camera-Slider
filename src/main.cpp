@@ -1,48 +1,68 @@
 #include <Arduino.h>
-#include "Motor_Nema17.hpp"
+#include <math.h>
 
-Motor_Nema17 motor = Motor_Nema17(10, 9);
+#define PRINT_DEBUG
+// #define SERIAL_DEBUG
+
+#ifndef PRINT_DEBUG
+#ifdef SERIAL_DEBUG
+#include <avr8-stub.h>
+#endif
+#endif
+
+#include "exception.hpp"
+
+#include "Motor_Nema17.hpp"
+#include "joystick.hpp"
+#include "path.hpp"
+#include "slider.hpp"
+#include "constants.hpp"
+
+enum class Mode
+{
+	MANUAL,		 // free joystick movment of all axes
+	SYNC_MOVING, // auto - drive according to points set in Path
+	REF,		 // "manual auto" select a specific point in path to drive to them as reference to adjust them. after the point is selected it switches to SYNC_MOVING to drive to the point.
+	PROGRAM		 // mode on display to select which point to overwrite with the current position
+};
+
+Motor_Nema17 motorX(10, 9), motorY(10, 9), motorZ(10, 9);
+Path path(10);
+Slider slider(&motorX, &motorY, &motorZ);
 
 void setup()
 {
+#ifdef PRINT_DEBUG
 	Serial.begin(9600);
-	pinMode(10, OUTPUT); // DIR
-	pinMode(9, OUTPUT);	 // step
-	pinMode(A0, INPUT);	 // joystick nema 23
+#else
+#ifdef SERIAL_DEBUG
+	debug_init();
+	breakpoint();
+#endif
+#endif
 
-	for (uint16_t j = 0; j < 4000; ++j)
+	srand(analogRead(A5));
+
+	for (uint8_t i = 0; i < path.size(); ++i)
 	{
-		motor.stepBackward();
-		delayMicroseconds(500);
+		auto pos = &path.at(i);
+		pos->x = random(-10000, 10000);
+		pos->y = random(-10000, 10000);
+		pos->z = random(-10000, 10000);
+		pos->isSet = random(0, 1);
+		pos->duration = random(0, 10 * _SECOND_TO_MICRO_SECOND_);
 	}
 
-	motor.overWritePos(0);
-	motor.startSyncMoving(4000, micros64() + 5000000);
+	// throwException(out_of_range("exception try"));
+	slider.startSyncMoving(&path, 0);
+	// catchException(out_of_range(), [](const exception &exc)
+	//			   { Serial.print("catched the exception: " + exc.what()); });
 
-	while (motor.isSyncMoving())
-		motor.loopSyncMoving();
+	delay(5000);
 }
 
 void loop()
 {
-	auto stick_pos = analogRead(A0);
-	if (stick_pos < 1023 / 2 - 40 || stick_pos > 1023 / 2 + 40)
-	{
-		if (stick_pos < 1023 / 2)
-		{
-			motor.stepForward();
-		}
-		else
-		{
-			motor.stepBackward();
-		}
-
-		uint16_t delay_micros = 0;
-		if (stick_pos > 512)
-			delay_micros = 512 - (stick_pos - 512);
-		else
-			delay_micros = 512 - (512 - stick_pos);
-
-		delayMicroseconds(delay_micros);
-	}
+	slider.loop();
+	thrownException.loop();
 }

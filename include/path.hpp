@@ -21,6 +21,8 @@ public:
 	 *
 	 * starPos and EndoPos are the indexes of those positions. Not the
 	 * pos on the slide on the slider. Not set positions are ignored
+	 *
+	 * @note return 0 and throws an exception if startPos or endPos are not valid
 	 */
 	TIME_TYPE getDuration(uint8_t startPos, uint8_t endPos) const;
 	// @return get duration of the whole path - 0 - size - 1 considering the Slider is at position[0]
@@ -40,14 +42,20 @@ Path::Path(uint8_t _len) : len(_len), positions(new Position[_len])
 Position &Path::operator[](uint8_t _pos) const
 {
 	if (_pos >= this->len)
-		throw out_of_range(String(F("_pos is out of range in ")) + __FILE__ + __LINE__);
-	return positions[_pos];
+	{
+		throwException(out_of_range(String(F("_pos is out of range in ")) + __FILE__ + __LINE__));
+		return this->positions[0];
+	}
+	return this->positions[_pos];
 }
 
 TIME_TYPE Path::getDuration(uint8_t startPos, uint8_t endPos) const
 {
 	if (startPos >= this->len || endPos >= this->len)
-		throw out_of_range(String(F("startPos or endPos is out of range in ")) + __FILE__ + __LINE__);
+	{
+		throwException(out_of_range(String(F("startPos or endPos is out of range in ")) + __FILE__ + __LINE__));
+		return 0;
+	}
 
 	if (startPos > endPos)
 	{
