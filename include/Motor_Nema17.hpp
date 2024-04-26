@@ -1,10 +1,8 @@
 #pragma once
 #include <Arduino.h>
 #include <math.h>
+#include "types.hpp"
 #include "micros_64.hpp"
-
-#define POS_TYPE int32_t
-#define TIME_TYPE uint64_t
 
 namespace
 {
@@ -72,6 +70,9 @@ public:
 	Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin);
 	virtual ~Motor_Nema17() {}
 
+	Motor_Nema17(const Motor_Nema17 &) = delete;
+	Motor_Nema17 &operator=(const Motor_Nema17 &) = delete;
+
 	/**
 	 * configure the set outputs as output at arduino
 	 */
@@ -126,6 +127,11 @@ public:
 	 * motor if he is in synced moving mode.
 	 */
 	void loopSyncMoving();
+
+	/**
+	 * @return true if the motor's position is on the set target position
+	 */
+	inline bool onTarget() const { return this->getPos() == this->syncMovingEnd; }
 
 	inline bool isSyncMoving() const { return this->in_syncMovingMode; }
 };
