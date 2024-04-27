@@ -185,8 +185,9 @@ bool Slider::setPath(Path *_targetPath)
 		Serial.print(pos.y);
 		Serial.print(F(", "));
 		Serial.print(pos.z);
-		Serial.print(F(") - duration: "));
-		Serial.println(static_cast<unsigned long>(pos.duration));
+		Serial.print(F(") - duration: \u001b[35m"));
+		Serial.print(static_cast<double>(pos.duration) / 1000000);
+		Serial.println(F(" sec.\u001b[0m"));
 	}
 	Serial.println();
 	Serial.println();
@@ -215,6 +216,14 @@ bool Slider::setPath(Path *_targetPath)
 				++endPosIndex;
 			} while (!this->targetPath->at(endPosIndex).isSet &&
 					 endPosIndex < this->targetPath->size() - 1);
+
+			/**
+			 * endPos last index isnt checked for tagged isSet so check it here manually.
+			 * if isnt set the path is good because we went over the whole path and didnt found something
+			 * until now and this isnt the next pos to drive to.
+			 */
+			if (endPosIndex == this->targetPath->size() - 1 && !this->targetPath->at(endPosIndex).isSet)
+				return true;
 
 			auto startPos = this->targetPath->at(startPosIndex);
 			auto endPos = this->targetPath->at(endPosIndex);
@@ -273,7 +282,11 @@ bool Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 	Serial.print(F("start point: "));
 	Serial.print(this->targetPosIndex);
 	Serial.print(F(", end point: "));
-	Serial.println(this->endTargetPosIndex);
+	Serial.print(this->endTargetPosIndex);
+	Serial.print(F(" duration: \u001b[35m"));
+	Serial.print(static_cast<double>(this->targetPath->at(this->targetPosIndex).duration) / 1000000);
+	Serial.println(F(" sec.\u001b[0m"));
+
 #endif
 	if (targetPosIndex > endTargetPosIndex)
 	{
@@ -327,10 +340,16 @@ void Slider::loop()
 		// set the next point or stop sync moving if on last point
 		if (allMotorsOnTarget)
 		{
+			TIME_TYPE durationToNextTarget = 0;
 #ifdef PRINT_DEBUG
+			static TIME_TYPE driveStartPt = 0;
 			Serial.println(); // newline from pos
-			Serial.println(F("\u001b[32mall motors on target...\u001b[0m"));
+			Serial.print(F("\u001b[32mall motors on target...\u001b[0m - took: \u001b[35m"));
+			Serial.print(static_cast<double>(micros64() - driveStartPt) / 1000000);
+			Serial.println(F(" sec.\u001b[0m"));
 			Serial.println(F("searching for next pos in path"));
+
+			driveStartPt = micros64();
 #endif
 			if (this->targetPosIndex == this->endTargetPosIndex)
 			{
@@ -344,6 +363,8 @@ void Slider::loop()
 			}
 			else
 			{
+				durationToNextTarget = this->targetPath->at(targetPosIndex).duration; // saving duration to next point before overwriting with the next target
+
 				// serach for next set position
 				this->targetPosIndex = this->getSetMarkedPos(this->targetPosIndex + 1, false); // search ascending
 
@@ -372,14 +393,15 @@ void Slider::loop()
 			Serial.println();
 			Serial.print(F("reached point -> seting next target point: "));
 			Serial.print(targetPosIndex);
-			Serial.print(F(", duration: "));
-			Serial.println(static_cast<unsigned long>(this->targetPath->at(this->targetPosIndex).duration));
+			Serial.print(F(", duration: \u001b[35m"));
+			Serial.print(static_cast<double>(this->targetPath->at(this->targetPosIndex).duration) / 1000000);
+			Serial.println(F(" sec.\u001b[0m"));
 #endif
 			auto nextTargetPos = this->targetPath->at(this->targetPosIndex);
 			auto now = micros64();
-			this->xAxis->startSyncMoving(nextTargetPos.x, now + nextTargetPos.duration);
-			this->yAxis->startSyncMoving(nextTargetPos.y, now + nextTargetPos.duration);
-			this->zAxis->startSyncMoving(nextTargetPos.z, now + nextTargetPos.duration);
+			this->xAxis->startSyncMoving(nextTargetPos.x, now + durationToNextTarget);
+			this->yAxis->startSyncMoving(nextTargetPos.y, now + durationToNextTarget);
+			this->zAxis->startSyncMoving(nextTargetPos.z, now + durationToNextTarget);
 			this->inSyncMoving = true;
 		}
 	}
