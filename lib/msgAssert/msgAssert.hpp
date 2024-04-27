@@ -5,6 +5,7 @@ namespace
 {
 	void printErrorAndAbort(String file, const uint32_t line)
 	{
+#ifdef PRINT_DEBUG
 		if (!Serial)
 			Serial.begin(9600);
 		Serial.print("ASSERT FAIL IN FILE: ");
@@ -12,6 +13,7 @@ namespace
 		Serial.print(", LINE: ");
 		Serial.println(String(line));
 		Serial.flush();
+#endif
 		abort();
 	}
 }
