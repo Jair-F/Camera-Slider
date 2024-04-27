@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <math.h>
 
-#define PRINT_DEBUG
+// #define PRINT_DEBUG
 // #define SERIAL_DEBUG
 
 #ifndef PRINT_DEBUG
@@ -27,13 +27,13 @@ enum class Mode
 };
 
 Motor_Nema17 motorX(10, 9), motorY(10, 9), motorZ(10, 9);
-Path path(10);
+Path path(20);
 Slider slider(&motorX, &motorY, &motorZ);
 
 void setup()
 {
 #ifdef PRINT_DEBUG
-	Serial.begin(9600);
+	Serial.begin(115200);
 	for (uint8_t i = 0; i < 3; ++i)
 		Serial.println();
 #else
@@ -52,7 +52,7 @@ void setup()
 		pos->y = random(-10000, 10000);
 		pos->z = random(-10000, 10000);
 		pos->isSet = random(0, 2);
-		pos->duration = random(0, 15 * _SECOND_TO_MICRO_SECOND_);
+		pos->duration = random(0.5 * _SECOND_TO_MICRO_SECOND_, 15 * _SECOND_TO_MICRO_SECOND_);
 	}
 
 	// throwException(out_of_range("exception try"));
