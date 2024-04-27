@@ -84,7 +84,7 @@ uint8_t Slider::getSetMarkedPos(uint8_t _pos, bool inverse)
 	{
 		if (_pos >= this->targetPath->size())
 		{
-			throwException(out_of_range(String(F("passed _pos is out of range - ")) + String(_pos)));
+			throwException(new out_of_range(String(F("passed _pos is out of range - ")) + String(_pos)));
 			return _pos;
 		}
 
@@ -98,35 +98,38 @@ uint8_t Slider::getSetMarkedPos(uint8_t _pos, bool inverse)
 		{
 			if (_pos == 0)
 			{
-				throwException(out_of_range(F("reached begin and didnt found next set pos")));
+				throwException(new out_of_range(F("reached begin and didnt found next set pos")));
 				return _pos;
 			}
 
 			do
 			{
 				--_pos;
-			} while (!this->targetPath->at(_pos).isSet || _pos == 0);
+			} while (!this->targetPath->at(_pos).isSet && _pos > 0);
 		}
 		else // ascending
 		{
 			if (_pos == this->targetPath->size() - 1)
 			{
-				throwException(out_of_range(F("reached end and didnt found next set pos")));
+				throwException(new out_of_range(F("reached end and didnt found next set pos")));
 				return _pos;
 			}
 
 			do
 			{
 				++_pos;
-			} while (!this->targetPath->at(_pos).isSet || _pos == this->targetPath->size() - 1);
+			} while (!this->targetPath->at(_pos).isSet && _pos < this->targetPath->size() - 1);
 		}
 
-		if ((_pos == 0 || _pos == this->targetPath->size() - 1))
+		if ((_pos == 0 || _pos >= this->targetPath->size() - 1))
+		{
+			//_pos = _pos == 0 ? 0 : this->targetPath->size() - 1; // reset in case it exceeded but leave 0 if _pos is 0
 			// if at begin or and and didnt found an element in that range
-			throwException(out_of_range(F("no set element found in search")));
+			throwException(new out_of_range(F("no set element found in search")));
+		}
 	}
 	else
-		throwException(invalid_argument(F("path cant be nullptr for seraching next pos")));
+		throwException(new invalid_argument(F("path cant be nullptr for seraching next pos")));
 
 	return _pos; // only that compiler doesnt outputs a warning
 }
@@ -195,14 +198,14 @@ inline void Slider::setPath(Path *_targetPath)
 				msg += startPosIndex;
 				msg += F(" and ");
 				msg += endPosIndex;
-				throwException(invalid_argument(msg));
+				throwException(new invalid_argument(msg));
 				return;
 			}
 		}
 	}
 	else
 	{
-		throwException(invalid_argument(F("in class Slider setPath-target path cant be nullptr")));
+		throwException(new invalid_argument(F("in class Slider setPath-target path cant be nullptr")));
 		return;
 	}
 
@@ -239,21 +242,22 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 	}
 	else
 	{
-		throwException(invalid_argument(F("path cant be nullptr if starting sync moving")));
+		throwException(new invalid_argument(F("path cant be nullptr if starting sync moving")));
 		return;
 	}
 
 	if (_startingPos > _endPos)
 	{
-		throwException(out_of_range(F("not satisfied: _startingPos <= _endPos")));
+		throwException(new out_of_range(F("not satisfied: _startingPos <= _endPos")));
 		return;
 	}
 
 	// this->getSetMarkedPos() checks for nullptr int this->targetPosIndex and pos out of range and throws exception if not set
 	this->targetPosIndex = this->getSetMarkedPos(_startingPos, false);
+	if (!thrownException->isCatched())
+		return; // no point to drive to
 	this->endTargetPosIndex = this->getSetMarkedPos(_endPos, true);
-	if (!thrownException.isCatched() &&
-		(thrownException.type() == out_of_range().type() || thrownException.type() == invalid_argument().type()))
+	if (!thrownException->isCatched())
 		return; // no point to drive to
 
 #ifdef PRINT_DEBUG
@@ -264,7 +268,7 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 #endif
 	if (targetPosIndex > endTargetPosIndex)
 	{
-		throwException(out_of_range(F("at least one point in path must be set in order to start sync moving")));
+		throwException(new out_of_range(F("at least one point in path must be set in order to start sync moving")));
 		return;
 	}
 
@@ -301,7 +305,7 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 void Slider::startSyncMoving(Path *_targetPath, uint8_t _startingPos, int16_t _endPos)
 {
 	this->setPath(_targetPath);
-	if (!thrownException.isCatched())
+	if (!thrownException->isCatched())
 		return; // an exception was thrown previously
 	this->startSyncMoving(_startingPos, _endPos);
 }

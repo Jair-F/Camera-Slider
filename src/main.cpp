@@ -55,8 +55,15 @@ void setup()
 
 	// throwException(out_of_range("exception try"));
 	slider.startSyncMoving(&path, 0);
-	// catchException(out_of_range(), [](const exception &exc)
-	//			   { Serial.print("catched the exception: " + exc.what()); });
+	catchException(out_of_range(), [](const exception &exc, void *)
+				   {
+#ifdef PRINT_DEBUG
+					   Serial.print("catched out_of_range exception after start sync moving: " + exc.what());
+#endif
+#ifdef SERIAL_DEBUG
+					   debug_message((String(F("catched out_of_range exception after start sync moving: ")) + exc.what()).c_str());
+#endif
+				   });
 
 	delay(5000);
 }
@@ -64,5 +71,5 @@ void setup()
 void loop()
 {
 	slider.loop();
-	thrownException.loop();
+	thrownException->loop();
 }

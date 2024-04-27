@@ -43,7 +43,7 @@ Position &Path::operator[](uint8_t _pos) const
 {
 	if (_pos >= this->len)
 	{
-		throwException(out_of_range(String(F("_pos is out of range in ")) + __FILE__ + __LINE__));
+		throwException(new out_of_range(String(F("_pos is out of range in ")) + __FILE__ + __LINE__));
 		return this->positions[0];
 	}
 	return this->positions[_pos];
@@ -53,7 +53,7 @@ TIME_TYPE Path::getDuration(uint8_t startPos, uint8_t endPos) const
 {
 	if (startPos >= this->len || endPos >= this->len)
 	{
-		throwException(out_of_range(String(F("startPos or endPos is out of range in ")) + __FILE__ + __LINE__));
+		throwException(new out_of_range(String(F("startPos or endPos is out of range in ")) + __FILE__ + __LINE__));
 		return 0;
 	}
 

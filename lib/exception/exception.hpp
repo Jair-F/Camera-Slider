@@ -5,16 +5,19 @@ class exception
 {
 private:
 	String msg;
-	bool catched = true;
+	bool catched;
 
 public:
-	exception(String _msg = "") : msg(_msg) {}
+	exception(String _msg = "", bool _catched = false) : msg(_msg), catched(_catched) {}
 	virtual ~exception() {}
 
 	virtual const String what() const;
 	virtual const char *whatc() const;
 
 	virtual void markCatched() { this->catched = true; }
+	/**
+	 * @return true if the last exception is cateched
+	 */
 	bool isCatched() const { return this->catched; }
 
 	operator bool() const { return this->isCatched(); }
@@ -83,33 +86,33 @@ void exception::loop()
 		Serial.println(String(F("uncatched exception(")) + this->type() + String(F("): ")) + this->what() + F(" --> stoping execution"));
 		Serial.flush(); // ensure the message will be printed
 #endif
-		abort();
-		; // stop execution
+		abort(); // stop execution
 	}
 }
 
-exception thrownException;
+exception *thrownException = new exception("", true);
 
-void throwException(const exception &exc)
+void throwException(exception *exc)
 {
+	// first check if the previous was cateched. could be that we didnt passed one loop
+	thrownException->loop();
+
+	delete thrownException;
+
 #ifdef PRINT_DEBUG
-	Serial.println("throwed exception - " + exc.type() + String(" - msg: ") + exc.what());
+	Serial.println("throwed exception - " + exc->type() + String(" - msg: ") + exc->what());
 #endif
 	thrownException = exc;
 }
 
 void catchException(const exception &catchType, void (*onExceptHandler)(const exception &, void *_spareArgument) = nullptr, void *_spareArgument = nullptr)
 {
-	//[](const exception &) {}
-	// first check if the previous was cateched. could be that we didnt passed one loop
-	thrownException.loop();
-
-	if (thrownException.type() == catchType.type())
+	if (thrownException->type() == catchType.type())
 	{
 		// if the exceptions match and the handler is set - execute
 		if (onExceptHandler != nullptr)
-			onExceptHandler(thrownException, _spareArgument);
+			onExceptHandler(*thrownException, _spareArgument);
 
-		thrownException.markCatched();
+		thrownException->markCatched();
 	}
 }
