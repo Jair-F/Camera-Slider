@@ -34,6 +34,8 @@ void setup()
 {
 #ifdef PRINT_DEBUG
 	Serial.begin(9600);
+	for (uint8_t i = 0; i < 3; ++i)
+		Serial.println();
 #else
 #ifdef SERIAL_DEBUG
 	debug_init();
@@ -41,7 +43,7 @@ void setup()
 #endif
 #endif
 
-	srand(analogRead(A5));
+	randomSeed(analogRead(A0));
 
 	for (uint8_t i = 0; i < path.size(); ++i)
 	{
@@ -49,23 +51,24 @@ void setup()
 		pos->x = random(-10000, 10000);
 		pos->y = random(-10000, 10000);
 		pos->z = random(-10000, 10000);
-		pos->isSet = random(0, 1);
-		pos->duration = random(0, 10 * _SECOND_TO_MICRO_SECOND_);
+		pos->isSet = random(0, 2);
+		pos->duration = random(0, 15 * _SECOND_TO_MICRO_SECOND_);
 	}
 
 	// throwException(out_of_range("exception try"));
-	slider.startSyncMoving(&path, 0);
-	catchException(out_of_range(), [](const exception &exc, void *)
-				   {
+	if (!slider.startSyncMoving(&path, 0))
+	{
+		catchException(out_of_range(), [](const exception &exc, void *)
+					   {
 #ifdef PRINT_DEBUG
-					   Serial.print("catched out_of_range exception after start sync moving: " + exc.what());
+						   Serial.print("\u001b[31mcatched out_of_range exception after start sync moving: " + exc.what());
+						   Serial.println(F("\u001b[0m"));
 #endif
 #ifdef SERIAL_DEBUG
-					   debug_message((String(F("catched out_of_range exception after start sync moving: ")) + exc.what()).c_str());
+						   debug_message((String(F("catched out_of_range exception after start sync moving: ")) + exc.what()).c_str());
 #endif
-				   });
-
-	delay(5000);
+					   });
+	}
 }
 
 void loop()

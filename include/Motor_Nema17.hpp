@@ -198,7 +198,7 @@ bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
 		!this->isValidSpeed(this->absDistTo(_destPos), _arrive_TPoint - micros64()))
 	{
 #ifdef PRINT_DEBUG
-		Serial.print(F("rejecting startSyncMoving because speeds arent valid - dest: "));
+		Serial.print(F("\u001b[33mrejecting startSyncMoving because speeds arent valid - dest: "));
 		Serial.print(_destPos);
 		Serial.print(F(", dist: "));
 		Serial.print(this->absDistTo(_destPos));
@@ -210,8 +210,9 @@ bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
 		Serial.print(static_cast<unsigned long>(micros64()));
 		Serial.print(F("=diff "));
 		Serial.print(static_cast<unsigned long>(abs(_arrive_TPoint - micros64())));
-		Serial.print(F(" - min required time: "));
-		Serial.println(static_cast<unsigned long>(this->minReqTime(this->absDistTo(_destPos))));
+		Serial.print(F(" -\u001b[4m min required time: "));
+		Serial.print(static_cast<unsigned long>(this->minReqTime(this->absDistTo(_destPos))));
+		Serial.println(F("\u001b[0m"));
 #endif
 		return false;
 	}
@@ -257,12 +258,6 @@ void Motor_Nema17::loopSyncMoving()
 		auto posDiff = this->relDistTo(expectedPos);
 		if (posDiff != 0)
 		{
-#ifdef PRINT_DEBUG
-			Serial.println(expectedPos);
-			Serial.println(this->getPos());
-			Serial.println(posDiff);
-			Serial.println();
-#endif
 			if (expectedPos > this->getPos())				// moving in + direction
 				for (uint16_t i = 0; i < abs(posDiff); ++i) // put back to uint16_t. only for debugging with serial its that slow that the diff can be so big
 					this->stepForward();

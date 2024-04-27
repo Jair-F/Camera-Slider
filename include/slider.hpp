@@ -50,7 +50,10 @@ public:
 	void stepY(POS_TYPE _numSteps) { this->step(this->yAxis, _numSteps); }
 	void stepZ(POS_TYPE _numSteps) { this->step(this->zAxis, _numSteps); }
 
-	inline void setPath(Path *_targetPath);
+	/**
+	 * @note throwing out_of_range exception if path speeds... is not valid
+	 */
+	bool setPath(Path *_targetPath);
 	inline Path *getPath() const { return this->targetPath; }
 
 	inline bool getInSyncMoving() const { return this->inSyncMoving; }
@@ -59,13 +62,15 @@ public:
 	/**
 	 * @param _endPos negative for last pos of targetPath
 	 * @note throws out_of_range if _targetPath, _startingPos or _endPos arent valid
+	 * @return true if all parameters are valid and sync moving started. false if not
 	 */
-	void startSyncMoving(uint8_t _startingPos = 0, int16_t _endPos = -1);
+	bool startSyncMoving(uint8_t _startingPos = 0, int16_t _endPos = -1);
 	/**
 	 * @param _endPos negative for last pos of targetPath
 	 * @note throws out_of_range if _targetPath, _startingPos or _endPos arent valid
+	 * @return true if all parameters are valid and sync moving started. false if not
 	 */
-	void startSyncMoving(Path *_targetPath, uint8_t _startingPos = 0, int16_t _endPos = -1);
+	bool startSyncMoving(Path *_targetPath, uint8_t _startingPos = 0, int16_t _endPos = -1);
 	inline void stopSyncMoving() { this->inSyncMoving = false; }
 	/**
 	 * runs sync moving of targetPath if targetPath is set and in
@@ -118,12 +123,12 @@ uint8_t Slider::getSetMarkedPos(uint8_t _pos, bool inverse)
 			do
 			{
 				++_pos;
-			} while (!this->targetPath->at(_pos).isSet && _pos < this->targetPath->size() - 1);
+			} while (!this->targetPath->at(_pos).isSet && _pos < this->targetPath->size());
 		}
 
-		if ((_pos == 0 || _pos >= this->targetPath->size() - 1))
+		if ((_pos == 0 || _pos > this->targetPath->size() - 1))
 		{
-			//_pos = _pos == 0 ? 0 : this->targetPath->size() - 1; // reset in case it exceeded but leave 0 if _pos is 0
+			_pos = _pos == 0 ? 0 : this->targetPath->size() - 1; // reset in case it exceeded but leave 0 if _pos is 0
 			// if at begin or and and didnt found an element in that range
 			throwException(new out_of_range(F("no set element found in search")));
 		}
@@ -162,8 +167,32 @@ void Slider::step(Motor_Nema17 *_axis, POS_TYPE _numSteps)
 			_axis->stepBackward();
 }
 
-inline void Slider::setPath(Path *_targetPath)
+bool Slider::setPath(Path *_targetPath)
 {
+	Path *targetPathBackup = this->targetPath;
+
+#ifdef PRINT_DEBUG
+	Serial.println(F("requested to set path: "));
+	for (uint8_t i = 0; i < _targetPath->size(); ++i)
+	{
+		auto pos = _targetPath->at(i);
+		Serial.print(pos.isSet);
+		Serial.print(F(" -> "));
+		Serial.print(i);
+		Serial.print(F(": ("));
+		Serial.print(pos.x);
+		Serial.print(F(", "));
+		Serial.print(pos.y);
+		Serial.print(F(", "));
+		Serial.print(pos.z);
+		Serial.print(F(") - duration: "));
+		Serial.println(static_cast<unsigned long>(pos.duration));
+	}
+	Serial.println();
+	Serial.println();
+#endif
+
+	// #error checking doesnt works
 	if (_targetPath != nullptr)
 	{
 		this->targetPath = _targetPath;
@@ -172,8 +201,7 @@ inline void Slider::setPath(Path *_targetPath)
 		uint8_t endPosIndex = 0;
 
 		// check for valid speeds
-		while (startPosIndex < this->targetPath->size() - 1 &&
-			   endPosIndex < this->targetPath->size() - 1)
+		do
 		{
 			do
 			{
@@ -194,47 +222,27 @@ inline void Slider::setPath(Path *_targetPath)
 				!this->yAxis->isValidSpeed(abs(endPos.y - startPos.y), startPos.duration) ||
 				!this->zAxis->isValidSpeed(abs(endPos.z - startPos.z), startPos.duration))
 			{
-				String msg = F("Slider - Invalid speed between position ");
+				this->targetPath = targetPathBackup; // restoring old path
+				String msg = F("Slider rejecting path - Invalid speed between position ");
 				msg += startPosIndex;
 				msg += F(" and ");
 				msg += endPosIndex;
-				throwException(new invalid_argument(msg));
-				return;
+				throwException(new out_of_range(msg));
+				return false;
 			}
-		}
+		} while (startPosIndex < this->targetPath->size() - 1 && endPosIndex < this->targetPath->size() - 1);
 	}
 	else
 	{
-		throwException(new invalid_argument(F("in class Slider setPath-target path cant be nullptr")));
-		return;
+		throwException(new out_of_range(F("in class Slider setPath-target path cant be nullptr")));
+		return false;
 	}
 
-#ifdef PRINT_DEBUG
-	Serial.println(F("path: "));
-	for (uint8_t i = 0; i < this->targetPath->size(); ++i)
-	{
-		auto pos = this->targetPath->at(i);
-		Serial.print(pos.isSet);
-		Serial.print(F(" -> "));
-		Serial.print(i);
-		Serial.print(F(": ("));
-		Serial.print(pos.x);
-		Serial.print(F(", "));
-		Serial.print(pos.y);
-		Serial.print(F(", "));
-		Serial.print(pos.z);
-		Serial.print(F(") - duration: "));
-		Serial.println(static_cast<unsigned long>(pos.duration));
-	}
-#endif
+	return true;
 }
 
-void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
+bool Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 {
-#ifdef PRINT_DEBUG
-	Serial.println(F("Starting sync moving: "));
-#endif
-
 	if (this->targetPath != nullptr)
 	{
 		if (_endPos < 0)
@@ -243,24 +251,25 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 	else
 	{
 		throwException(new invalid_argument(F("path cant be nullptr if starting sync moving")));
-		return;
+		return false;
 	}
 
 	if (_startingPos > _endPos)
 	{
 		throwException(new out_of_range(F("not satisfied: _startingPos <= _endPos")));
-		return;
+		return false;
 	}
 
 	// this->getSetMarkedPos() checks for nullptr int this->targetPosIndex and pos out of range and throws exception if not set
 	this->targetPosIndex = this->getSetMarkedPos(_startingPos, false);
 	if (!thrownException->isCatched())
-		return; // no point to drive to
+		return false; // no point to drive to
 	this->endTargetPosIndex = this->getSetMarkedPos(_endPos, true);
 	if (!thrownException->isCatched())
-		return; // no point to drive to
+		return false; // no point to drive to
 
 #ifdef PRINT_DEBUG
+	Serial.print(F("started sync moving: "));
 	Serial.print(F("start point: "));
 	Serial.print(this->targetPosIndex);
 	Serial.print(F(", end point: "));
@@ -269,11 +278,10 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 	if (targetPosIndex > endTargetPosIndex)
 	{
 		throwException(new out_of_range(F("at least one point in path must be set in order to start sync moving")));
-		return;
+		return false;
 	}
 
 	this->inSyncMoving = true;
-
 	auto targetStartPos = this->targetPath->at(this->targetPosIndex);
 
 	// setup the first movment to get to target start position at max speed but only if we arent on that pos
@@ -300,14 +308,14 @@ void Slider::startSyncMoving(uint8_t _startingPos, int16_t _endPos)
 		this->yAxis->startSyncMoving(targetStartPos.y, now + maxDuration);
 		this->zAxis->startSyncMoving(targetStartPos.z, now + maxDuration);
 	}
+	return true;
 }
 
-void Slider::startSyncMoving(Path *_targetPath, uint8_t _startingPos, int16_t _endPos)
+bool Slider::startSyncMoving(Path *_targetPath, uint8_t _startingPos, int16_t _endPos)
 {
-	this->setPath(_targetPath);
-	if (!thrownException->isCatched())
-		return; // an exception was thrown previously
-	this->startSyncMoving(_startingPos, _endPos);
+	if (!this->setPath(_targetPath))
+		return false; // an exception was thrown previously
+	return this->startSyncMoving(_startingPos, _endPos);
 }
 
 void Slider::loop()
@@ -320,14 +328,17 @@ void Slider::loop()
 		if (allMotorsOnTarget)
 		{
 #ifdef PRINT_DEBUG
-			Serial.println(F("all motors on target..."));
+			Serial.println(); // newline from pos
+			Serial.println(F("\u001b[32mall motors on target...\u001b[0m"));
 			Serial.println(F("searching for next pos in path"));
 #endif
 			if (this->targetPosIndex == this->endTargetPosIndex)
 			{
-				this->stopSyncMoving();
+				this->stopSyncMoving(); // stopping sync moving - reached last point
 #ifdef PRINT_DEBUG
-				Serial.println(F("stopping sync moving - reached last point"));
+				Serial.println();
+				Serial.println(F("\u001b[32m\u001b[7mstopping sync moving - reached last point\u001b[0m"));
+				Serial.println();
 #endif
 				return;
 			}
@@ -335,27 +346,30 @@ void Slider::loop()
 			{
 				// serach for next set position
 				this->targetPosIndex = this->getSetMarkedPos(this->targetPosIndex + 1, false); // search ascending
-			}
 
+				catchException(
+					out_of_range(), [](const exception &ex, void *_spareArgument)
+					{
 #ifdef PRINT_DEBUG
-			Serial.println(F("next pos or exception!!"));
-#endif
-
-			catchException(
-				out_of_range(), [](const exception &ex, void *_spareArgument)
-				{
-#ifdef PRINT_DEBUG
-				Serial.println(F("stopping sync moving - reached last point"));
+					/**
+					 * color codes: https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html
+					*/
+					Serial.println();
+					Serial.println(F("\u001b[32\u001b[7mmstopping sync moving - reached last point\u001b[0m"));
+					Serial.println();
 #endif
 					// a bit sketchy but it works!!
 					Slider* _this = static_cast<Slider*>(_spareArgument);
-					_this->stopSyncMoving(); 
+					_this->stopSyncMoving(); // stopping sync moving - reached last point
 					; },
-				this);
+					this);
+			}
+
 			if (!this->getInSyncMoving())
 				return; // if we are not in sync moving its because the exception above - exit because down we set inSyncMoving again to true
 
 #ifdef PRINT_DEBUG
+			Serial.println();
 			Serial.print(F("reached point -> seting next target point: "));
 			Serial.print(targetPosIndex);
 			Serial.print(F(", duration: "));
@@ -376,24 +390,25 @@ void Slider::loop()
 
 #ifdef PRINT_DEBUG
 	auto pos = this->getPosition();
+
+	Serial.print(F("\r")); // move cursor to the beginning of the current
 	Serial.print(F("pos: ("));
 
 	Serial.print(pos.x);
-	Serial.print(F(" t: "));
-	Serial.print(this->xAxis->onTarget());
+	Serial.print(F(" - on target: "));
+	Serial.print(this->xAxis->onTarget() ? F("true") : F("false"));
 	Serial.print(F(", "));
 
 	Serial.print(pos.y);
-	Serial.print(F(" t: "));
-	Serial.print(this->yAxis->onTarget());
+	Serial.print(F(" - on target: "));
+	Serial.print(this->yAxis->onTarget() ? F("true") : F("false"));
 	Serial.print(F(", "));
 
 	Serial.print(pos.z);
-	Serial.print(F(" t: "));
-	Serial.print(this->zAxis->onTarget());
-	Serial.print(F(")"));
+	Serial.print(F(" - on target: "));
+	Serial.print(this->zAxis->onTarget() ? F("true") : F("false"));
+	Serial.print(F(")   "));
 
-	Serial.println();
 	Serial.flush();
 #endif
 }

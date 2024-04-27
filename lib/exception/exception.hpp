@@ -100,7 +100,7 @@ void throwException(exception *exc)
 	delete thrownException;
 
 #ifdef PRINT_DEBUG
-	Serial.println("throwed exception - " + exc->type() + String(" - msg: ") + exc->what());
+	Serial.println("throwed exception - " + exc->type() + String(F(" - msg: ")) + exc->what());
 #endif
 	thrownException = exc;
 }
@@ -114,5 +114,9 @@ void catchException(const exception &catchType, void (*onExceptHandler)(const ex
 			onExceptHandler(*thrownException, _spareArgument);
 
 		thrownException->markCatched();
+
+#ifdef PRINT_DEBUG
+		Serial.println("exception - " + thrownException->type() + String(F(" - msg: ")) + thrownException->what() + "catched");
+#endif
 	}
 }
