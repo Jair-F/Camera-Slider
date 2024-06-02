@@ -3,6 +3,7 @@
 #include <math.h>
 #include "types.hpp"
 #include "micros_64.hpp"
+#include "speed.hpp"
 
 namespace
 {
@@ -12,7 +13,26 @@ namespace
 	//												max rotations per minute
 	constexpr auto MAX_STEPS_PER_SECOND = (((uint32_t)MAX_SPEED * (uint32_t)STEPS_PER_ROTATION) / 60);
 	constexpr auto MIN_DELAY_PER_STEP = ((uint32_t)1000 * (uint32_t)1000) / (uint32_t)MAX_STEPS_PER_SECOND; // in micro seconds
-}
+
+	constexpr auto MAX_SPEED_CHANGE_PER_STEP = 10; // max speed change for ramping in microseconds between each step
+
+	TIME_TYPE minRequiredRampingTime(Speed startSpeed, Speed targetSpeed, TIME_TYPE _maxSpeedChange = 5)
+	{
+		if (startSpeed.approxSame(targetSpeed))
+			return 0;
+
+		decltype(startSpeed.value()) duration = 0;
+		bool rampingUp = targetSpeed > startSpeed;
+		for (decltype(duration) i = startSpeed;
+			 rampingUp ? (i < targetSpeed) : (i > targetSpeed);
+			 rampingUp ? (i += MAX_SPEED_CHANGE_PER_STEP) : (i -= MAX_SPEED_CHANGE_PER_STEP))
+		{
+			duration += i;
+		}
+
+		return duration;
+	}
+};
 
 class Motor_Nema17
 {
@@ -22,15 +42,24 @@ private:
 	 * true on forward, false on backward
 	 */
 	bool currDirect = true;
-	TIME_TYPE lastStep_TPoint = 0;	// in micros
-	POS_TYPE pos = 0;				// current pos of motor
-	bool in_syncMovingMode = false; // if the motor is in synced/synchronized mode - approaching a point by a specific time point
+	TIME_TYPE lastStep_TPoint = 0, prevLastStep_TPoint = 0; // in micros
+	POS_TYPE pos = 0;										// current pos of motor
+	bool in_syncMovingMode = false;							// if the motor is in synced/synchronized mode - approaching a point by a specific time point
 
 	/**
 	 * start postion where started with syncMoving
 	 */
-	POS_TYPE syncMovingStart = 0, syncMovingEnd = 0;
+	POS_TYPE syncMovingStart = 0;
+	POS_TYPE syncMovingEnd = 0;
 	TIME_TYPE syncMovingStart_TPoint = 0, syncMovingEnd_TPoint = 0;
+	bool endRampDown = false;
+
+	/**
+	 * adjusts the current required nominal speed to compensate the controller
+	 * calculation time out. is adjusted every 2 steps
+	 */
+	uint16_t speedOffset;
+	Speed currTragetNominalSpeed, currNominalSpeed; // nominal is current speed
 
 protected:
 	/**
@@ -51,10 +80,8 @@ protected:
 
 	/**
 	 * when in syncMoving this function returns the expected position where the motor
-	 * should be according the the actual time.
-	 *
-	 * the actual pos and expected will be compensated and reduced by one at the next
-	 * loopSyncMoving() call.
+	 * should be according the the actual time at static speed without acceleration/
+	 * deaceleration.
 	 */
 	POS_TYPE syncMovingExpectedPos();
 
@@ -65,6 +92,9 @@ protected:
 	 * is at least 5us delay to let the motor work properly
 	 */
 	inline void _makeStep();
+
+	inline Speed measuredSpeed() const { return Speed(this->lastStep_TPoint - this->prevLastStep_TPoint); }
+	inline Speed constSpeedToTarget() const { Speed((micros64() - this->syncMovingEnd_TPoint) / this->absDistTo(this->syncMovingEnd)); }
 
 public:
 	Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin);
@@ -118,7 +148,7 @@ public:
 	 *
 	 * @return true if every parameters are valid - speed in limit and _arrive_TPoint later than now
 	 */
-	bool startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint);
+	bool startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint, bool _endRampDown = false);
 
 	inline void abortSyncMoving() { this->in_syncMovingMode = false; }
 
@@ -136,8 +166,10 @@ public:
 	inline bool isSyncMoving() const { return this->in_syncMovingMode; }
 };
 
-Motor_Nema17::Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin) : directionPin(_directionPin), stepPin(_stepPin)
+Motor_Nema17::Motor_Nema17(uint8_t _directionPin, uint8_t _stepPin) : directionPin(_directionPin), stepPin(_stepPin), speedOffset(0), currTragetNominalSpeed(0), currNominalSpeed(0)
 {
+	this->currTragetNominalSpeed.setIdle();
+	this->currNominalSpeed.setIdle();
 }
 void Motor_Nema17::begin()
 {
@@ -153,6 +185,7 @@ void Motor_Nema17::_makeStep()
 	delayMicroseconds(5); // min delay for the motor driver to read the step signal
 	digitalWrite(this->stepPin, LOW);
 
+	this->prevLastStep_TPoint = this->lastStep_TPoint;
 	this->lastStep_TPoint = micros64();
 }
 
@@ -163,7 +196,6 @@ void Motor_Nema17::stepForward()
 	this->_makeStep();
 
 	this->pos += 1;
-	// this->lastStep_TPoint = micros64();
 }
 
 void Motor_Nema17::stepBackward()
@@ -173,7 +205,6 @@ void Motor_Nema17::stepBackward()
 	this->_makeStep();
 
 	this->pos -= 1;
-	// this->lastStep_TPoint = micros64();
 }
 
 bool Motor_Nema17::isValidSpeed(POS_TYPE dist, TIME_TYPE duration) const
@@ -191,7 +222,7 @@ TIME_TYPE Motor_Nema17::minReqTime(POS_TYPE dist) const
 	return (dist / (double)MAX_STEPS_PER_SECOND) * 1000 * 1000; // double doesnt cuts of the precision at division
 }
 
-bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
+bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint, bool _endRampDown)
 {
 	if (_destPos == this->getPos() ||
 		_arrive_TPoint <= micros64() ||
@@ -222,6 +253,7 @@ bool Motor_Nema17::startSyncMoving(POS_TYPE _destPos, TIME_TYPE _arrive_TPoint)
 	this->syncMovingEnd = _destPos;
 	this->syncMovingStart_TPoint = micros64();
 	this->syncMovingEnd_TPoint = _arrive_TPoint;
+	this->endRampDown = _endRampDown;
 
 	return true;
 }
@@ -254,19 +286,43 @@ void Motor_Nema17::loopSyncMoving()
 {
 	if (this->in_syncMovingMode)
 	{
-		auto expectedPos = this->syncMovingExpectedPos();
-		auto posDiff = this->relDistTo(expectedPos);
-		if (posDiff != 0)
+		if (this->getPos() == this->syncMovingEnd) // on position
 		{
-			if (expectedPos > this->getPos())				// moving in + direction
-				for (uint16_t i = 0; i < abs(posDiff); ++i) // put back to uint16_t. only for debugging with serial its that slow that the diff can be so big
-					this->stepForward();
-			else // moving in - direction
-				for (uint16_t i = 0; i < abs(posDiff); ++i)
-					this->stepBackward();
-		}
-
-		if (this->getPos() == this->syncMovingEnd)
 			this->in_syncMovingMode = false;
+			this->speedOffset = 0;
+			this->currTragetNominalSpeed.setIdle();
+			this->currNominalSpeed.setIdle();
+			return;
+		}
+		else
+		{
+			if (this->endRampDown)
+			{
+				// added offset to of 500 mcs to be on the safe side
+				if (minRequiredRampingTime(this->measuredSpeed(), Speed(0)) + 500 <= this->syncMovingEnd_TPoint - this->syncMovingStart_TPoint)
+					this->currTragetNominalSpeed.setIdle();
+			}
+
+			auto measured_speed = this->measuredSpeed();
+
+			if (measured_speed >= this->currNominalSpeed.value() + this->speedOffset)
+			{
+				// if time has passed make the next step
+				if (this->syncMovingEnd > this->getPos()) // moving in + direction
+					this->stepForward();
+				else // moving in - direction
+					this->stepBackward();
+
+				if (!measured_speed.approxSame(this->currTragetNominalSpeed))
+				{
+					if (measured_speed < this->currTragetNominalSpeed)
+						this->currNominalSpeed += MAX_SPEED_CHANGE_PER_STEP;
+					else
+						this->currNominalSpeed -= MAX_SPEED_CHANGE_PER_STEP;
+				}
+
+				this->currTragetNominalSpeed = constSpeedToTarget();
+			}
+		}
 	}
 }
